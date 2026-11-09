@@ -11,6 +11,66 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
+
+      - name: Arrange files into folders
+        run: |
+          python3 - <<'PY'
+          import os, re, shutil, struct
+          R = 'app/src/main/res/'
+          def put(src, dst):
+              os.makedirs(os.path.dirname(dst), exist_ok=True)
+              if os.path.abspath(src) != os.path.abspath(dst):
+                  shutil.copy(src, dst)
+          def width(p):
+              with open(p, 'rb') as f:
+                  h = f.read(24)
+              return struct.unpack('>I', h[16:20])[0]
+          dens = {48:'mdpi', 72:'hdpi', 96:'xhdpi', 144:'xxhdpi', 192:'xxxhdpi'}
+          launch, rnd = [], []
+          for f in sorted(os.listdir('.')):
+              if not os.path.isfile(f):
+                  continue
+              low = f.lower()
+              txt = ''
+              if low.endswith(('.html', '.gradle', '.xml')):
+                  txt = open(f, encoding='utf-8', errors='ignore').read()
+              if low.startswith('index') and low.endswith('.html'):
+                  m = re.search(r'<title>(.*?)</title>', txt, re.S)
+                  title = m.group(1) if m else ''
+                  put(f, 'app/src/admin/assets/index.html' if 'Admin' in title else 'app/src/user/assets/index.html')
+              elif low.startswith('build') and low.endswith('.gradle'):
+                  put(f, 'app/build.gradle' if 'productFlavors' in txt else 'build.gradle')
+              elif low.startswith('styles') and low.endswith('.xml'):
+                  put(f, R + ('values-v31' if 'SplashScreen' in txt else 'values') + '/styles.xml')
+              elif low == 'colors.xml':
+                  put(f, R + 'values/colors.xml')
+              elif low.startswith('ic_launcher_round') and low.endswith('.xml'):
+                  put(f, R + 'mipmap-anydpi-v26/ic_launcher_round.xml')
+              elif low.startswith('ic_launcher') and low.endswith('.xml'):
+                  put(f, R + 'mipmap-anydpi-v26/ic_launcher.xml')
+              elif low.startswith('ic_launcher_round') and low.endswith('.png'):
+                  rnd.append(f)
+              elif low.startswith('ic_launcher') and low.endswith('.png'):
+                  launch.append(f)
+              elif low.startswith('ic_logo'):
+                  put(f, R + 'drawable-nodpi/ic_logo.png')
+              elif low == 'ic_notification.xml':
+                  put(f, R + 'drawable/ic_notification.xml')
+              elif f == 'av_shim.js':
+                  put(f, R + 'raw/av_shim.js')
+              elif f == 'MainActivity.java':
+                  put(f, 'app/src/main/java/com/alokverse/app/MainActivity.java')
+              elif f == 'AndroidManifest.xml':
+                  put(f, 'app/src/main/AndroidManifest.xml')
+              elif f == 'gradle-wrapper.properties':
+                  put(f, 'gradle/wrapper/gradle-wrapper.properties')
+          for f in launch:
+              put(f, R + 'mipmap-' + dens[width(f)] + '/ic_launcher.png')
+          for f in rnd:
+              put(f, R + 'mipmap-' + dens[width(f)] + '/ic_launcher_round.png')
+          PY
+          find app -type f | sort
+
       - name: Accept Android licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - uses: gradle/actions/setup-gradle@v4
