@@ -32,14 +32,12 @@ jobs:
                   continue
               low = f.lower()
               txt = ''
-              if low.endswith(('.html', '.gradle', '.xml')):
+              if low.endswith(('.html', '.xml')):
                   txt = open(f, encoding='utf-8', errors='ignore').read()
               if low.startswith('index') and low.endswith('.html'):
                   m = re.search(r'<title>(.*?)</title>', txt, re.S)
                   title = m.group(1) if m else ''
                   put(f, 'app/src/admin/assets/index.html' if 'Admin' in title else 'app/src/user/assets/index.html')
-              elif low.startswith('build') and low.endswith('.gradle'):
-                  put(f, 'app/build.gradle' if 'productFlavors' in txt else 'build.gradle')
               elif low.startswith('styles') and low.endswith('.xml'):
                   put(f, R + ('values-v31' if 'SplashScreen' in txt else 'values') + '/styles.xml')
               elif low == 'colors.xml':
@@ -62,13 +60,79 @@ jobs:
                   put(f, 'app/src/main/java/com/alokverse/app/MainActivity.java')
               elif f == 'AndroidManifest.xml':
                   put(f, 'app/src/main/AndroidManifest.xml')
-              elif f == 'gradle-wrapper.properties':
-                  put(f, 'gradle/wrapper/gradle-wrapper.properties')
           for f in launch:
               put(f, R + 'mipmap-' + dens[width(f)] + '/ic_launcher.png')
           for f in rnd:
               put(f, R + 'mipmap-' + dens[width(f)] + '/ic_launcher_round.png')
           PY
+
+      - name: Write Gradle files
+        run: |
+          rm -f build.gradle settings.gradle gradle.properties
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "AlokVerse"
+          include ':app'
+          EOF
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.alokverse.app'
+              compileSdk 35
+              defaultConfig {
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      signingConfig signingConfigs.debug
+                  }
+              }
+              flavorDimensions 'app'
+              productFlavors {
+                  user {
+                      dimension 'app'
+                      applicationId 'com.alokverse.app'
+                      resValue 'string', 'app_name', 'AlokVerse'
+                  }
+                  admin {
+                      dimension 'app'
+                      applicationId 'com.alokverse.admin'
+                      resValue 'string', 'app_name', 'AlokVerse Admin'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.webkit:webkit:1.12.1'
+          }
+          EOF
           find app -type f | sort
 
       - name: Accept Android licenses
